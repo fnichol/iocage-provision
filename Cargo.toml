@@ -1,0 +1,25 @@
+[package]
+name = "iocage-provision"
+version = "0.1.0"
+authors = ["Fletcher Nichol <fnichol@nichol.ca>"]
+edition = "2018"
+license = "MPL-2.0"
+repository = "https://github.com/fnichol/iocage-provision"
+documentation = "https://github.com/fnichol/iocage-provision"
+homepage = "https://github.com/fnichol/iocage-provision"
+keywords = ["iocage", "jail", "freebsd"]
+categories = ["command-line-utilities"]
+description = """
+Creates an iocage based FreeBSD jail
+"""
+
+[dependencies]
+chrono = "0.4.9"
+human-panic = "1.0.1"
+ipnet = "2.0.0"
+lazy_static = "1.4.0"
+log = "0.4.8"
+nix = "0.15.0"
+structopt = { version = "0.3.0", default-features = false, features = ["suggestions", "wrap_help"] }
+tempfile = "3.1.0"
+users = "0.9.1"

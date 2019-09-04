@@ -1,0 +1,58 @@
+#
+# Common templates aliases
+#
+
+common_unix_template: &COMMON_UNIX_TEMPLATE
+  install_rustup_script: |
+    curl -sSfL https://sh.rustup.rs \
+      | sh -s -- -y --default-toolchain none --no-modify-path
+  install_rust_script: rustup default "$RUST_VERSION"
+
+  cargo_cache:
+    folder: $CARGO_HOME/registry
+    fingerprint_script: echo "${CIRRUS_OS}"; cat Cargo.lock
+
+  cargo_make_cache:
+    folder: $CARGO_HOME/opt/cargo-make
+    fingerprint_script: |
+      echo "$CIRRUS_OS"
+      echo "${CI_CACHE_BUST:-}"
+      echo "$RUST_VERSION"
+      ./.ci/crate-version.sh cargo-make
+    populate_script: ./.ci/cargo-cache-install.sh cargo-make
+
+  before_cache_script: rm -rf "$CARGO_HOME/registry/index"
+
+  link_plugins_script: ln -snf "$CARGO_HOME"/opt/*/bin/* "$CARGO_HOME"/bin/
+
+
+task:
+  name: check
+  freebsd_instance:
+    image: freebsd-11-2-release-amd64
+  env:
+    RUST_VERSION: stable
+
+  << : *COMMON_UNIX_TEMPLATE
+
+  lint_script: cargo "+$RUST_VERSION" make ci-lint-flow
+  format_script: cargo "+$RUST_VERSION" make ci-format-flow
+
+task:
+  env:
+    matrix:
+      - RUST_VERSION: stable
+
+  matrix:
+    - matrix:
+        - name: test_${RUST_VERSION}_freebsd
+          freebsd_instance:
+            image: freebsd-11-2-release-amd64
+          env:
+            CARGO_HOME: "/root/.cargo"
+            PATH: "$CARGO_HOME/bin:$PATH"
+
+      << : *COMMON_UNIX_TEMPLATE
+
+      build_script: cargo "+$RUST_VERSION" make ci-build-flow
+      test_script: cargo "+$RUST_VERSION" make ci-test-flow
