@@ -1,4 +1,4 @@
-use iocage_provision::{ErrorContext, Result};
+use iocage_provision::Result;
 use log::{debug, error};
 use std::process;
 
@@ -8,9 +8,8 @@ fn main() {
     cli::util::setup_panic_hooks();
 
     if let Err(err) = try_main() {
-        match err.context() {
-            Some(ctx) => error!("{} ({})", ctx, err),
-            None => error!("{}", err),
+        for line in cli::util::pretty_error(&err).lines() {
+            error!("{}", line);
         }
         process::exit(1);
     }

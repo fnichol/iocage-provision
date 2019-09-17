@@ -15,6 +15,7 @@ Creates an iocage based FreeBSD jail
 
 [dependencies]
 chrono = "0.4.9"
+failure = { version = "0.1.5", default-features = false, features = ["std"] }
 human-panic = "1.0.1"
 ipnet = "2.0.0"
 lazy_static = "1.4.0"
