@@ -16,7 +16,9 @@ Creates an iocage based FreeBSD jail
 [dependencies]
 chrono = "0.4.9"
 failure = { version = "0.1.5", default-features = false, features = ["std"] }
-human-panic = "1.0.1"
+# Pending a point release or a v2 release to drop failure's `failure_derive`
+# optional dependency. See: https://github.com/rust-cli/human-panic/issues/46
+human-panic = { git = "https://github.com/rust-cli/human-panic.git" }
 ipnet = "2.0.0"
 lazy_static = "1.4.0"
 log = "0.4.8"

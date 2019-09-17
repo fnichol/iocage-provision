@@ -256,6 +256,7 @@ pub(crate) mod util {
             name: env!("CARGO_PKG_NAME").into(),
             authors: env!("CARGO_PKG_AUTHORS").into(),
             homepage: env!("CARGO_PKG_HOMEPAGE").into(),
+            repository: option_env!("CARGO_PKG_REPOSITORY").unwrap_or("").into(),
         };
 
         let default_hook = panic::take_hook();
