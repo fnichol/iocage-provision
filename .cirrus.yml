@@ -28,8 +28,8 @@ common_unix_template: &COMMON_UNIX_TEMPLATE
 
 task:
   name: check
-  freebsd_instance:
-    image: freebsd-11-2-release-amd64
+  container:
+    image: rust:latest
   env:
     RUST_VERSION: stable
 
@@ -50,7 +50,7 @@ task:
             image: freebsd-11-2-release-amd64
           env:
             HOME: "/root"
-            CARGO_HOME: "$HOME/.cargo"
+            CARGO_HOME: "/root/.cargo"
             PATH: "$CARGO_HOME/bin:$PATH"
 
       << : *COMMON_UNIX_TEMPLATE
