@@ -1,4 +1,5 @@
-hellcheck shell=sh disable=SC2039
+#!/usr/bin/env sh
+# shellcheck shell=sh disable=SC2039
 
 print_usage() {
   local program="$1"
