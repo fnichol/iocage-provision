@@ -20,7 +20,7 @@ fn main() {
 }
 
 fn try_main() -> Result<()> {
-    let args = cli::Args::from_args();
+    let args = cli::from_args();
     cli::util::init_logger(args.verbose);
     debug!("parsed cli arguments; args={:?}", args);
 

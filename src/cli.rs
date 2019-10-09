@@ -13,39 +13,106 @@ use std::str;
 use structopt::{clap, StructOpt};
 
 lazy_static::lazy_static! {
+    /// The computed default value for the gateway option.
     static ref DEFAULT_GATEWAY: String = default_gateway();
+
+    /// The computed default value for the release option.
     static ref DEFAULT_RELEASE: String = default_release();
 }
 
+/// The "author" string for help messages.
 const AUTHOR: &str = concat!(env!("CARGO_PKG_AUTHORS"), "\n\n");
 
-pub(crate) struct Args;
+/// The "about" string for help messages
+const ABOUT: &str = concat!(
+    "\
+Creates an iocage based FreeBSD jail.
 
-impl Args {
-    pub(crate) fn from_args() -> ArgsInner {
-        ArgsInner::from_clap(
-            &ArgsInner::clap()
-                // TODO: StructOpt generates a Clap app with an unconditional
-                // `.version(env!("CARGO_PKG_VERSION"))` at the end of the builder chain which
-                // overrides any values inserted in the proc macro. Until this behavior can be
-                // fixed, this is a temporary workaround which wraps the underlying `App` type and
-                // chains on a call to `version`.
-                .version(BuildInfo::version_short())
-                .get_matches(),
-        )
-    }
+Project home page: ",
+    env!("CARGO_PKG_HOMEPAGE"),
+    "
+
+Use -h for short descriptions and --help for more details.",
+);
+
+/// The "long_about" string for help messages.
+const LONG_ABOUT: &str = concat!(
+    "\
+Creates an iocage based FreeBSD jail.
+
+This program uses iocage to create a VNET networked ZFS-backed FreeBSD jail. Suitable defaults are
+computed for the default gateway and base release to reduce the number of arguments in the common
+case. An optional --ssh flag will install and start an SSH service when the jail boots for remote
+management. Finally, an optional --user option will create a user in the new jail by copying values
+from the outside/host system.
+
+Project home page: ",
+    env!("CARGO_PKG_HOMEPAGE"),
+    "
+
+Use -h for short descriptions and --help for more details.",
+);
+
+/// An examples section at the end of the help message.
+const AFTER_HELP: &str = "\
+EXAMPLES:
+    Example 1 Provisioning a New Jail With a Name and Address
+
+      The following command will create a new jail called ferris with an IP
+      address/subnet mask of 192.168.0.100/24.
+
+        # iocage-provision ferris 192.168.0.100/24
+
+    Example 2 Provisioning a New Jail With a User and SSH Service
+
+      The following command will create a new jail with a running SSH service,
+      and a user called jdoe which is copied from the host system (note that
+      the user must exist on the host system).
+
+        # iocage-provision --user jdoe --ssh homebase 10.0.0.25/24
+
+    Example 3 Using a Custom Default Gateway and Base Release
+
+      The following command will create a new jail by overriding the default
+      gateway and default base release values.
+
+        # iocage-provision --gateway 10.1.0.254 --release 11.1-RELEASE \\
+          bespoke 10.1.0.1/24
+
+";
+
+/// Parse, validate, and return the CLI arguments as a typed struct.
+pub(crate) fn from_args() -> Args {
+    Args::from_clap(
+        &Args::clap()
+            // TODO: StructOpt generates a Clap app with an unconditional
+            // `.version(env!("CARGO_PKG_VERSION"))` at the end of the builder chain which
+            // overrides any values inserted in the proc macro. Until this behavior can be
+            // fixed, this is a temporary workaround which wraps the underlying `App` type and
+            // chains on a call to `version`.
+            .version(BuildInfo::version_short())
+            .get_matches(),
+    )
 }
 
-/// Creates an iocage based FreeBSD jail.
+/// The parsed CLI arguments.
 #[derive(Debug, StructOpt)]
 #[structopt(
+    global_settings(&[clap::AppSettings::UnifiedHelpMessage]),
     max_term_width = 100,
     author = AUTHOR,
+    about = ABOUT,
+    long_about = LONG_ABOUT,
     version = BuildInfo::version_short(),
     long_version = BuildInfo::version_long(),
+    after_help = AFTER_HELP,
 )]
-pub(crate) struct ArgsInner {
+pub(crate) struct Args {
     /// IP address of the default gateway route for a VNET.
+    ///
+    /// This address is used when setting up the VNET networking of the jail. If not provided the
+    /// default value will be the address corresponding to the default route on the underlying host
+    /// as determined by using the `netstat` program.
     #[structopt(
         short = "g",
         long,
@@ -55,6 +122,8 @@ pub(crate) struct ArgsInner {
     pub(crate) gateway: IpAddr,
 
     /// IP address & subnet mask for the jail instance. [example: 10.200.0.50/24]
+    ///
+    /// The IP address and the subnet mask are both required for the value to be considered valid.
     #[structopt(index = 2, rename_all = "screaming-snake")]
     pub(crate) ip: IpNet,
 
@@ -62,7 +131,11 @@ pub(crate) struct ArgsInner {
     #[structopt(index = 1, rename_all = "screaming-snake")]
     pub(crate) name: String,
 
-    /// FreeBSD release to use for the jail instance
+    /// FreeBSD release to use for the jail instance.
+    ///
+    /// If not provided, the default value will be the same release version that is running on the
+    /// underlying host system. For example if `uname -r` returns `11.2-STABLE`, then the default
+    /// value would be `11.2-RELEASE`.
     #[structopt(
         short = "R",
         long,
@@ -71,11 +144,19 @@ pub(crate) struct ArgsInner {
     )]
     pub(crate) release: String,
 
-    /// Installs and sets up an SSH service
+    /// Installs and sets up an SSH service.
+    ///
+    /// If this flag is set, then SSH software is installed, enabled on boot and is started on
+    /// first boot. Useful for jails that required remote administration, remote file copying, etc.
     #[structopt(short = "s", long)]
     pub(crate) ssh: bool,
 
     /// User to create in jail instance (based on host system's information).
+    ///
+    /// When this option is used, a user account will be created in the new jail with settings
+    /// copied from the underlying system's `passwd` database. In other words, the username
+    /// provided must exist on the host system, otherwise the command will result in an error and
+    /// the jail will not be created.
     #[structopt(short = "u", long, rename_all = "screaming-snake")]
     pub(crate) user: Option<String>,
 
@@ -86,6 +167,7 @@ pub(crate) struct ArgsInner {
     pub(crate) verbose: usize,
 }
 
+/// A default gateway value.
 fn default_gateway() -> String {
     netstat_gateway_addr()
         .unwrap_or_else(|err| {
@@ -98,10 +180,22 @@ fn default_gateway() -> String {
         .to_string()
 }
 
+/// A default release value.
 fn default_release() -> String {
     utsname::uname().release().replace("-STABLE", "-RELEASE")
 }
 
+/// Determines and returns a default gateway IP address by querying the `netstat` command.
+///
+/// # Errors
+///
+/// Returns an `Err` if:
+///
+/// * The `netstat` command cannot be found
+/// * The output of the command cannot be parsed as UTF-8
+/// * No line of output starting with `"default"` can be found
+/// * The default line cannot be successfully split
+/// * The IP address string cannot be parsed as an IP address
 fn netstat_gateway_addr() -> Result<IpAddr, GatewayError> {
     str::from_utf8(
         Command::new("netstat")
@@ -124,11 +218,16 @@ fn netstat_gateway_addr() -> Result<IpAddr, GatewayError> {
     .map_err(GatewayError::IpAddr)
 }
 
+/// Error when determining a default gateway IP address.
 #[derive(Debug)]
 enum GatewayError {
+    /// A command cannot be found or run successfully.
     Cmd(io::Error),
+    /// An IP address failed to be parsed.
     IpAddr(net::AddrParseError),
+    /// The output of the `netstat` command failed to be parsed.
     NetstatParse(&'static str),
+    /// A string failed to be parsed as UTF-8.
     Utf8(str::Utf8Error),
 }
 
@@ -158,14 +257,16 @@ impl error::Error for GatewayError {
     }
 }
 
-/// Build time metadata
+/// Build time metadata.
 struct BuildInfo;
 
 impl BuildInfo {
+    /// Returns a short version string.
     fn version_short() -> &'static str {
         include_str!(concat!(env!("OUT_DIR"), "/version_short.txt"))
     }
 
+    /// Returns a long version string.
     fn version_long() -> &'static str {
         include_str!(concat!(env!("OUT_DIR"), "/version_long.txt"))
     }

@@ -28,15 +28,23 @@ macro_rules! section {
     )
 }
 
+/// A specialized `Result` type for this crate's operations.
 pub type Result<T> = result::Result<T, failure::Error>;
 
+/// Error type for this crate.
 #[derive(Debug)]
 pub enum Error {
+    /// A command returned a non-zero exit code and thus is considered to have failed.
     CmdFail(i32),
+    /// A command I/O error for one of the streams.
     CmdIO,
+    /// A command-related thread panicked.
     CmdThread,
+    /// A system group ID was not found.
     NoGid(u32),
+    /// A system user name was not found.
     NoUser(String),
+    /// The effective user is not currently the `root` user.
     NotRoot,
 }
 
@@ -57,6 +65,11 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
+/// Ensures that the current effective user is root.
+///
+/// # Errors
+///
+/// Returns an `Err` if the current effective `uid` is any value other than `0`.
 pub fn ensure_root() -> Result<()> {
     if users::get_effective_uid() != 0 {
         Err(Error::NotRoot.into())
@@ -65,6 +78,13 @@ pub fn ensure_root() -> Result<()> {
     }
 }
 
+/// Creates, starts, and sets up a new FreeBSD jail via the `iocage` program.
+///
+/// # Errors
+///
+/// Returns an `Err` if a jail could not be completely provisioned successfully. Note that a
+/// failure from this function may leave behind a jail in an inconsistent state that needs to be
+/// cleaned up out of band.
 pub fn provision_jail(
     name: &str,
     ip: &IpNet,
@@ -105,6 +125,13 @@ pub fn provision_jail(
     Ok(())
 }
 
+/// Returns a `User` for a given name, if one exists.
+///
+/// If `None` is provided as an argument, then `Ok(None)` will be returned.
+///
+/// # Errors
+///
+/// Returns an `Err` if an associated system user cannot be found for the given user name.
 fn find_user(user_str: Option<&str>) -> Result<Option<User>> {
     match user_str {
         Some(user_str) => match users::get_user_by_name(user_str) {
@@ -115,10 +142,20 @@ fn find_user(user_str: Option<&str>) -> Result<Option<User>> {
     }
 }
 
+/// Returns a `Group` for a given group ID (i.e. `gid`).
+///
+/// # Errors
+///
+/// Returns an `Err` if an associated system group cannot be found for the given group ID.
 fn find_group(gid: u32) -> Result<Group> {
     users::get_group_by_gid(gid).ok_or_else(|| Error::NoGid(gid).into())
 }
 
+/// Creates a package list JSON file for the `iocage create` subcommand and returns the file path.
+///
+/// # Errors
+///
+/// Returns an `Err` if the JSON file could not be successfully created and written.
 fn create_pkglist_json(user: Option<&User>) -> Result<NamedTempFile> {
     let json_str = match user {
         Some(user) => {
@@ -146,16 +183,26 @@ fn create_pkglist_json(user: Option<&User>) -> Result<NamedTempFile> {
     Ok(json)
 }
 
-fn exec_sudo_config(name: &str) -> Result<()> {
+/// Prepares the sudo config in the given jail.
+///
+/// # Errors
+///
+/// Returns an `Err` if the commands were not successfully executed in the jail.
+fn exec_sudo_config(jail_name: &str) -> Result<()> {
     iocage_exec(
-        name,
+        jail_name,
         "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >/usr/local/etc/sudoers.d/wheel",
     )
 }
 
-fn exec_create_group(name: &str, group: &Group) -> Result<()> {
+/// Creates a system group in the given jail.
+///
+/// # Errors
+///
+/// Returns an `Err` if the commands were not successfully executed in the jail.
+fn exec_create_group(jail_name: &str, group: &Group) -> Result<()> {
     iocage_exec(
-        name,
+        jail_name,
         format!(
             "pw groupadd -n '{grp}' -g '{gid}'",
             gid = group.gid(),
@@ -164,9 +211,14 @@ fn exec_create_group(name: &str, group: &Group) -> Result<()> {
     )
 }
 
-fn exec_create_user(name: &str, user: &User, group: &Group) -> Result<()> {
+/// Creates a system user in the given jail.
+///
+/// # Errors
+///
+/// Returns an `Err` if the commands were not successfully executed in the jail.
+fn exec_create_user(jail_name: &str, user: &User, group: &Group) -> Result<()> {
     iocage_exec(
-        name,
+        jail_name,
         format!(
             "pw useradd -n '{usr}' -u '{uid}' -g '{grp}' -G wheel -m -s '{shl}'",
             grp = group.name().to_string_lossy(),
@@ -177,15 +229,25 @@ fn exec_create_user(name: &str, user: &User, group: &Group) -> Result<()> {
     )
 }
 
-fn exec_ssh_service(name: &str) -> Result<()> {
+/// Configures and starts an SSH service in the given jail.
+///
+/// # Errors
+///
+/// Returns an `Err` if the commands were not successfully executed in the jail.
+fn exec_ssh_service(jail_name: &str) -> Result<()> {
     iocage_exec(
-        name,
+        jail_name,
         r#"sysrc -f /etc/rc.conf sshd_enable="YES" && service sshd start"#,
     )
 }
 
+/// Creates a new jail with the given configuration.
+///
+/// # Errors
+///
+/// Returns an `Err` if the jail was not successfully created.
 fn run_iocage_create(
-    name: &str,
+    jail_name: &str,
     ip: &IpNet,
     gateway: &IpAddr,
     release: &str,
@@ -194,7 +256,7 @@ fn run_iocage_create(
     let mut cmd = Command::new("iocage");
     cmd.arg("create")
         .arg("--name")
-        .arg(name)
+        .arg(jail_name)
         .arg("--release")
         .arg(release)
         .arg("--pkglist")
@@ -218,11 +280,25 @@ fn run_iocage_create(
     }
 }
 
-fn iocage_exec<S: AsRef<str>>(name: &str, src: S) -> Result<()> {
+/// Executes a command or script of commands in the given jail.
+///
+/// # Errors
+///
+/// Returns an `Err` if:
+///
+/// * The input and output streams were not successfully set up
+/// * The `iocage` program was not found
+/// * The `iocage` exits with a code that is not zero
+fn iocage_exec<S: AsRef<str>>(jail_name: &str, src: S) -> Result<()> {
     let mut cmd = Command::new("iocage");
     cmd.arg("exec")
-        .arg(name)
+        .arg(jail_name)
         .arg("sh")
+        // `iocage` is a Python program and will therefore buffer output when executed in a
+        // non-interactive mode. Setting a value for the `PYTHONUNBUFFERED` environment variable
+        // ensures that the output streams don't needlessly buffer.
+        //
+        // See: https://docs.python.org/2/using/cmdline.html#envvar-PYTHONUNBUFFERED
         .env("PYTHONUNBUFFERED", "true");
 
     let status = spawn_and_indent_with_stdin(cmd, |mut stdin| {
@@ -245,10 +321,31 @@ fn iocage_exec<S: AsRef<str>>(name: &str, src: S) -> Result<()> {
     }
 }
 
+/// Spawns a `Command`, indents the output stream contents, and returns its `ExitStatus`.
+///
+/// # Errors
+///
+/// Returns an `Err` if:
+///
+/// * The command failed to spawn
+/// * One of the I/O streams failed to be properly captured
+/// * One of the output-reading threads panics
+/// * The command wasn't running
 fn spawn_and_indent(cmd: Command) -> Result<ExitStatus> {
     spawn_and_indent_with_stdin(cmd, |_| Ok(()))
 }
 
+/// Spawns a `Command` with data for the standard input stream, indents the output stream contents,
+/// and returns its `ExitStatus`.
+///
+/// # Errors
+///
+/// Returns an `Err` if:
+///
+/// * The command failed to spawn
+/// * One of the I/O streams failed to be properly captured
+/// * One of the output-reading threads panics
+/// * The command wasn't running
 fn spawn_and_indent_with_stdin<F>(mut cmd: Command, stdin_func: F) -> Result<ExitStatus>
 where
     F: FnOnce(ChildStdin) -> Result<()>,
