@@ -57,7 +57,7 @@ If [Rust](https://rustup.rs/) is installed, then installing with Cargo is
 straight forward:
 
 ```console
-cargo install iocage-provision
+$ cargo install iocage-provision
 ```
 
 ### From Source
