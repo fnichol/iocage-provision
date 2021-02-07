@@ -6,16 +6,16 @@ print_usage() {
 
   echo "$program
 
-    Prints latest version of a Cargo crate
+    Builds cargo-make into a dedicated directory for caching
 
     USAGE:
-        $program [FLAGS] [--] <CRATE>
+        $program [FLAGS] [--] <PLUGIN>
 
     FLAGS:
         -h, --help      Prints help information
 
     ARGS:
-        <CRATE>  Name of the Cargo crate
+        <PLUGIN>  Name of the Cargo plugin
     " | sed 's/^ \{1,4\}//g'
 }
 
@@ -46,35 +46,45 @@ main() {
             ;;
           *)
             print_usage "$program" >&2
-            fail "invalid argument --$OPTARG"
+            die "invalid argument --$OPTARG"
             ;;
         esac
         ;;
       \?)
         print_usage "$program" >&2
-        fail "invalid argument; arg=-$OPTARG"
+        die "invalid argument; arg=-$OPTARG"
         ;;
     esac
   done
   shift "$((OPTIND - 1))"
 
-  if [ -z "${1:-}" ]; then
-    print_usage "$program" >&2
-    fail "missing <PLUGIN> argument; arg=-$OPTARG"
+  local dest
+  if [ -n "${CARGO_HOME:-}" ]; then
+    dest="$CARGO_HOME"
+  elif [ -n "${HOME:-}" ]; then
+    dest="$HOME/.cargo"
+  else
+    die "cannot determine CARGO_HOME"
   fi
-  local crate="$1"
-  shift
 
-  report_version "$crate"
+  install_cargo_make "$dest"
 }
 
-report_version() {
-  local crate="$1"
+install_cargo_make() {
+  local dest="$1"
+  local plugin="cargo-make"
 
-  cargo search --limit 1 --quiet "$crate" | head -n 1 | awk -F'"' '{print $2}'
+  echo "--- Building $plugin in $dest"
+
+  mkdir -p "$dest"
+  rustup install stable
+  cargo +stable install --root "$dest/opt/$plugin" --force --verbose "$plugin"
+
+  # Create symbolic links for all execuatbles into $CARGO_HOME/bin
+  ln -snf "$dest/opt/$plugin/bin"/* "$dest/bin/"
 }
 
-fail() {
+die() {
   echo "" >&2
   echo "xxx $1" >&2
   echo "" >&2
