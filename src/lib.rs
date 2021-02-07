@@ -254,14 +254,14 @@ fn run_iocage_create(
     pkglist: &Path,
 ) -> Result<()> {
     let mut cmd = Command::new("iocage");
-    cmd.arg("create")
+    cmd.arg("--force")
+        .arg("create")
         .arg("--name")
         .arg(jail_name)
         .arg("--release")
         .arg(release)
         .arg("--pkglist")
         .arg(pkglist)
-        .arg("--force")
         .arg("vnet=on")
         .arg(format!("ip4_addr=vnet0|{}", ip))
         .arg(format!("defaultrouter={}", gateway))
