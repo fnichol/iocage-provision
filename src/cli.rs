@@ -385,11 +385,11 @@ pub(crate) mod util {
     pub(crate) fn pretty_error(err: &failure::Error) -> String {
         let mut pretty = "Error: ".to_string();
         pretty.push_str(&err.to_string());
-        pretty.push_str("\n");
+        pretty.push('\n');
         for cause in err.iter_causes() {
             pretty.push_str("Caused by: ");
             pretty.push_str(&cause.to_string());
-            pretty.push_str("\n");
+            pretty.push('\n');
         }
         pretty
     }

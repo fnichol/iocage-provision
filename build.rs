@@ -35,10 +35,10 @@ fn version_short(info: &mut Info) -> String {
         let mut extra = String::new();
         extra.push_str(" (");
         extra.push_str(&hash);
-        extra.push_str(" ");
+        extra.push(' ');
         if let Some(date) = info.commit_date() {
             extra.push_str(&date);
-            extra.push_str(")");
+            extra.push(')');
             version.push_str(&extra)
         }
     }
@@ -77,25 +77,22 @@ mod inner {
         pub fn commit_hash_short(&mut self) -> Option<&str> {
             self.0
                 .entry("commit_hash_short")
-                .or_insert(commit_hash_short())
-                .as_ref()
-                .map(String::as_str)
+                .or_insert_with(commit_hash_short)
+                .as_deref()
         }
 
         pub fn commit_hash_long(&mut self) -> Option<&str> {
             self.0
                 .entry("commit_hash_long")
-                .or_insert(commit_hash_long())
-                .as_ref()
-                .map(String::as_str)
+                .or_insert_with(commit_hash_long)
+                .as_deref()
         }
 
         pub fn commit_date(&mut self) -> Option<&str> {
             self.0
                 .entry("commit_date")
-                .or_insert(commit_date())
-                .as_ref()
-                .map(String::as_str)
+                .or_insert_with(commit_date)
+                .as_deref()
         }
     }
 
@@ -103,7 +100,7 @@ mod inner {
         let hash = command_stdout(Command::new(git()).args(&["show", "-s", "--format=%h"]));
 
         match is_dirty() {
-            Some(id) if id == true => hash.map(|hash| format!("{}-dirty", hash)),
+            Some(id) if id => hash.map(|hash| format!("{}-dirty", hash)),
             _ => hash,
         }
     }
@@ -112,7 +109,7 @@ mod inner {
         let hash = command_stdout(Command::new(git()).args(&["show", "-s", "--format=%H"]));
 
         match is_dirty() {
-            Some(id) if id == true => hash.map(|hash| format!("{}-dirty", hash)),
+            Some(id) if id => hash.map(|hash| format!("{}-dirty", hash)),
             _ => hash,
         }
     }
@@ -130,7 +127,7 @@ mod inner {
     }
 
     fn git() -> String {
-        env::var("GIT_CMD").unwrap_or("git".to_string())
+        env::var("GIT_CMD").unwrap_or_else(|_| "git".to_string())
     }
 
     fn command_stdout(cmd: &mut Command) -> Option<String> {
