@@ -1,59 +1,144 @@
-#
-# Common templates aliases
-#
+---
+anchors:
+  - &install_cargo_make_unix
+    install_cargo_make_script: ./.ci/install-cargo-make.sh
 
-common_unix_template: &COMMON_UNIX_TEMPLATE
-  install_rustup_script: |
-    curl -sSfL https://sh.rustup.rs \
-      | sh -s -- -y --default-toolchain none --no-modify-path
-  install_rust_script: rustup default "$RUST_VERSION"
+  - &build_cargo_make_unix
+    build_cargo_make_cache:
+      folder: $CARGO_HOME/opt/cargo-make
+      fingerprint_script: |
+        echo "$CIRRUS_OS"
+        echo "${CI_CACHE_BUST:-}"
+        echo "$RUST_VERSION"
+        ./.ci/install-cargo-make.sh --print-latest
+      populate_script: ./.ci/build-cargo-make.sh
+    link_cargo_make_script: ln -snf "$CARGO_HOME"/opt/*/bin/* "$CARGO_HOME"/bin/
 
-  cargo_cache:
-    folder: $CARGO_HOME/registry
-    fingerprint_script: echo "${CIRRUS_OS}"; cat Cargo.lock
+  - &base_unix
+    env:
+      CARGO_HOME: /usr/local/cargo
+      PATH: /usr/local/cargo/bin:$PATH
+    install_rustup_script: |
+      curl -sSfL https://sh.rustup.rs | sh -s -- \
+        -y --default-toolchain none --profile minimal --no-modify-path
+    install_rust_script: rustup default "$RUST_VERSION"
 
-  cargo_make_cache:
-    folder: $CARGO_HOME/opt/cargo-make
-    fingerprint_script: |
-      echo "$CIRRUS_OS"
-      echo "${CI_CACHE_BUST:-}"
-      echo "$RUST_VERSION"
-      ./.ci/crate-version.sh cargo-make
-    populate_script: ./.ci/cargo-cache-install.sh cargo-make
+    cargo_cache:
+      folder: $CARGO_HOME/registry
+      fingerprint_script: |
+        if [ ! -f Cargo.lock ]; then
+          cargo generate-lockfile --quiet
+        fi
+        echo "${CIRRUS_OS}"; cat Cargo.lock
 
-  before_cache_script: rm -rf "$CARGO_HOME/registry/index"
+  - &base_linux
+    install_dependencies_script: apt-get install -y unzip
+    <<: *base_unix
+    <<: *install_cargo_make_unix
 
-  link_plugins_script: ln -snf "$CARGO_HOME"/opt/*/bin/* "$CARGO_HOME"/bin/
+  - &base_freebsd
+    <<: *base_unix
+    <<: *build_cargo_make_unix
 
+  - &install_target_unix
+    install_rustup_target_script: rustup target install "$TARGET"
+
+  - &build_unix
+    build_script: cargo make build-release -- "--bin=$BIN" "--target=$TARGET"
+    strip_script: $STRIP "target/$TARGET/release/$BIN"
+    rename_script: cp "target/$TARGET/release/$BIN" "${BIN}-${TARGET}"
+
+  - &cleanup_before_upload_cache_unix
+    cleanup_before_upload_cache_script: rm -rf "$CARGO_HOME/registry/index"
+
+env:
+  RUST_VERSION: stable
+  MIN_SUPPORTED_RUST_VERSION: 1.40.0 # Due to clap 3 beta.2 (mem::take)
 
 task:
   name: check
   container:
     image: rust:latest
-  env:
-    RUST_VERSION: stable
-
-  << : *COMMON_UNIX_TEMPLATE
-
-  lint_script: cargo "+$RUST_VERSION" make ci-lint-flow
-  format_script: cargo "+$RUST_VERSION" make ci-format-flow
+  <<: *base_linux
+  lint_script: cargo make check-lint
+  format_script: cargo make check-format
 
 task:
+  name: test-${RUST_VERSION}-${TARGET}
   env:
     matrix:
       - RUST_VERSION: stable
-
+      - RUST_VERSION: nightly
+      - RUST_VERSION: $MIN_SUPPORTED_RUST_VERSION
+  allow_failures: $RUST_VERSION == 'nightly'
   matrix:
     - matrix:
-        - name: test_${RUST_VERSION}_freebsd
+        - env:
+            TARGET: x86_64-unknown-freebsd
           freebsd_instance:
-            image: freebsd-11-2-release-amd64
-          env:
-            HOME: "/root"
-            CARGO_HOME: "/root/.cargo"
-            PATH: "$CARGO_HOME/bin:$PATH"
+            image_family: freebsd-11-4
+          <<: *base_freebsd
+      <<: *install_target_unix
+      test_bin_script: cargo make test-bin -- "--target=$TARGET"
+      test_lib_script: cargo make test-lib -- "--target=$TARGET"
+      <<: *cleanup_before_upload_cache_unix
 
-      << : *COMMON_UNIX_TEMPLATE
+task:
+  name: bin-build-${BIN}-${TARGET}
+  env:
+    BIN: iocage-provision
+    RUST_BACKTRACE: 1
+  matrix:
+    - matrix:
+        - env:
+            TARGET: x86_64-unknown-freebsd
+            STRIP: strip
+            EXT: tar.gz
+          freebsd_instance:
+            image_family: freebsd-11-4
+          depends_on:
+            - check
+            - test-stable-x86_64-unknown-freebsd
+          <<: *base_freebsd
+          <<: *install_target_unix
+          <<: *build_unix
+          archive_script: tar czf "$BIN-$TARGET.$EXT" "$BIN-$TARGET"
+      checksums_script: ./.ci/build-checksums.sh "$BIN-$TARGET.$EXT"
+      binaries_artifacts:
+        path: "$BIN-$TARGET.$EXT*"
+      <<: *cleanup_before_upload_cache_unix
 
-      build_script: cargo "+$RUST_VERSION" make ci-build-flow
-      test_script: cargo "+$RUST_VERSION" make ci-test-flow
+task:
+  name: release-version
+  env:
+    BIN: iocage-provision
+    GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
+  only_if: $CIRRUS_TAG != ''
+  depends_on:
+    - bin-build-iocage-provision-x86_64-unknown-freebsd
+  install_dependencies_script: apk add curl jo jq
+  create_github_release_script: |
+    if ! upload_url="$(
+      ./.ci/cirrus-release.sh gh_create_version_release \
+        "$CIRRUS_REPO_FULL_NAME" \
+        "$CIRRUS_TAG"
+    )"; then
+      echo "xxx Failed to create release" >&2
+      exit 1
+    fi
+    echo "$upload_url" > /tmp/upload_url
+  download_cirrus_artifacts_script: |
+    cr="$(readlink -f ./.ci/cirrus-release.sh)"
+    manifest="$(readlink -f ".ci/$BIN.manifest.txt")"
+    mkdir -p /tmp/release
+    cd /tmp/release
+    awk '{ print $2 }' "$manifest" | while read -r a; do
+      "$cr" ci_download "bin-build-$a/binaries/$a"
+      "$cr" ci_download "bin-build-$a/binaries/$a.md5"
+      "$cr" ci_download "bin-build-$a/binaries/$a.sha256"
+    done
+    cp "$manifest" .
+    ls -l "$BIN"*
+  upload_release_artifacts_script: |
+    url="$(cat /tmp/upload_url)"
+    ./.ci/cirrus-release.sh gh_upload_all "$url" /tmp/release
