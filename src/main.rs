@@ -30,7 +30,7 @@ fn try_main() -> Result<()> {
         &args.ip,
         &args.gateway,
         &args.release,
-        args.user.as_ref().map(String::as_str),
+        args.user.as_deref(),
         args.ssh,
     )?;
 
