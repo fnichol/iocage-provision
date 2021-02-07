@@ -34,9 +34,9 @@ copying values from the outside/host system.
   - [Example 2 Provisioning a New Jail With a User and SSH Service](#example-2-provisioning-a-new-jail-with-a-user-and-ssh-service)
   - [Example 3 Using a Custom Default Gateway and Base Release](#example-3-using-a-custom-default-gateway-and-base-release)
 - [CI Status](#ci-status)
-  - [Build (master branch)](#build-master-branch)
-  - [Test (master branch)](#test-master-branch)
-  - [Check (master branch)](#check-master-branch)
+  - [Build (main branch)](#build-main-branch)
+  - [Test (main branch)](#test-main-branch)
+  - [Check (main branch)](#check-main-branch)
 - [Code of Conduct](#code-of-conduct)
 - [Issues](#issues)
 - [Contributing](#contributing)
@@ -64,7 +64,7 @@ $ cargo install iocage-provision
 
 To install from source, you can clone the Git repository, build with Cargo and
 copy the binary into a destination directory. This will build the project from
-the latest commit on the master branch, which may not correspond to the latest
+the latest commit on the main branch, which may not correspond to the latest
 stable release:
 
 ```console
@@ -107,24 +107,24 @@ $ iocage-provision --gateway 10.1.0.254 --release 11.1-RELEASE \
 
 ## CI Status
 
-### Build (master branch)
+### Build (main branch)
 
 | Operating System | Stable Rust                                                             |
 | ---------------: | ----------------------------------------------------------------------- |
-|          FreeBSD | [![FreeBSD Stable Build Status][badge-stable_freebsd-build]][ci-master] |
+|          FreeBSD | [![FreeBSD Stable Build Status][badge-stable_freebsd-build]][ci-main] |
 
-### Test (master branch)
+### Test (main branch)
 
 | Operating System | Stable Rust                                                           |
 | ---------------: | --------------------------------------------------------------------- |
-|          FreeBSD | [![FreeBSD Stable Test Status][badge-stable_freebsd-test]][ci-master] |
+|          FreeBSD | [![FreeBSD Stable Test Status][badge-stable_freebsd-test]][ci-main] |
 
-### Check (master branch)
+### Check (main branch)
 
 |        | Status                                            |
 | ------ | ------------------------------------------------- |
-| Lint   | [![Lint Status][badge-check-lint]][ci-master]     |
-| Format | [![Format Status][badge-check-format]][ci-master] |
+| Lint   | [![Lint Status][badge-check-lint]][ci-main]     |
+| Format | [![Format Status][badge-check-format]][ci-main] |
 
 ## Code of Conduct
 
@@ -184,15 +184,15 @@ licensed as above, without any additional terms or conditions.
 [badge-version]:
   https://img.shields.io/crates/v/iocage-provision.svg?style=flat-square
 [changelog]:
-  https://github.com/fnichol/iocage-provision/blob/master/CHANGELOG.md
+  https://github.com/fnichol/iocage-provision/blob/main/CHANGELOG.md
 [ci]: https://cirrus-ci.com/github/fnichol/iocage-provision
-[ci-master]: https://cirrus-ci.com/github/fnichol/iocage-provision/master
+[ci-main]: https://cirrus-ci.com/github/fnichol/iocage-provision/main
 [code-of-conduct]:
-  https://github.com/fnichol/iocage-provision/blob/master/CODE_OF_CONDUCT.md
+  https://github.com/fnichol/iocage-provision/blob/main/CODE_OF_CONDUCT.md
 [crate]: https://crates.io/crates/iocage-provision
 [docs]: https://docs.rs/iocage-provision
 [fnichol]: https://github.com/fnichol
 [github-releases]: https://github.com/fnichol/iocage-provision/releases
 [github]: https://github.com/fnichol/iocage-provision
 [issues]: https://github.com/fnichol/iocage-provision/issues
-[license]: https://github.com/fnichol/iocage-provision/blob/master/LICENSE.txt
+[license]: https://github.com/fnichol/iocage-provision/blob/main/LICENSE.txt
