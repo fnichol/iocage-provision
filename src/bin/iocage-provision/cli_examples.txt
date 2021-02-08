@@ -1,0 +1,23 @@
+EXAMPLES:
+    Example 1 Provisioning a New Jail With a Name and Address
+
+      The following command will create a new jail called ferris with an IP
+      address/subnet mask of 192.168.0.100/24.
+
+        # iocage-provision ferris 192.168.0.100/24
+
+    Example 2 Provisioning a New Jail With a User and SSH Service
+
+      The following command will create a new jail with a running SSH service,
+      and a user called jdoe which is copied from the host system (note that
+      the user must exist on the host system).
+
+        # iocage-provision --user jdoe --ssh homebase 10.0.0.25/24
+
+    Example 3 Using a Custom Default Gateway and Base Release
+
+      The following command will create a new jail by overriding the default
+      gateway and default base release values.
+
+        # iocage-provision --gateway 10.1.0.254 --release 11.1-RELEASE \
+          bespoke 10.1.0.1/24
