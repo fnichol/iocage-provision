@@ -84,7 +84,7 @@ task:
       <<: *cleanup_before_upload_cache_unix
 
 task:
-  name: bin-build-${BIN}-${TARGET}
+  name: bin-build-${BIN}-${TARGET}.${EXT}
   env:
     BIN: iocage-provision
     RUST_BACKTRACE: 1
@@ -115,7 +115,7 @@ task:
     GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
   only_if: $CIRRUS_TAG != ''
   depends_on:
-    - bin-build-iocage-provision-x86_64-unknown-freebsd
+    - bin-build-iocage-provision-x86_64-unknown-freebsd.tar.gz
   install_dependencies_script: apk add curl jo jq
   create_github_release_script: |
     if ! upload_url="$(
