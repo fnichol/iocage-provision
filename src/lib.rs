@@ -6,7 +6,7 @@
 //#![deny(missing_docs)]
 
 use ipnet::IpNet;
-use log::{debug, info, warn};
+use log::{debug, info};
 use nix::sys::utsname;
 use std::ffi::OsStr;
 use std::fs;
@@ -26,6 +26,26 @@ macro_rules! section {
             println!("--- {}", format!($($arg)+));
         } else {
             log::info!($($arg)+);
+        }
+    )
+}
+
+macro_rules! output {
+    ($($arg:tt)+) => (
+        if log::max_level() == log::LevelFilter::Info {
+            println!("        {}", format!($($arg)+));
+        } else {
+            log::info!($($arg)+);
+        }
+    )
+}
+
+macro_rules! eoutput {
+    ($($arg:tt)+) => (
+        if log::max_level() == log::LevelFilter::Info {
+            eprintln!("        {}", format!($($arg)+));
+        } else {
+            log::warn!($($arg)+);
         }
     )
 }
@@ -453,13 +473,7 @@ where
     let stdout_handle = thread::spawn(move || {
         for line in stdout.lines() {
             // This error happens in a thread, so we will panic here on error
-            let line = line.expect("failed to read line from stdout");
-
-            if log::max_level() == log::LevelFilter::Info {
-                println!("        {}", line);
-            } else {
-                info!("{}", line);
-            }
+            output!("{}", line.expect("failed to read line from stdout"));
         }
     });
 
@@ -472,13 +486,7 @@ where
     let stderr_handle = thread::spawn(move || {
         for line in stderr.lines() {
             // This error happens in a thread, so we will panic here on error
-            let line = line.expect("failed to read line from stderr");
-
-            if log::max_level() == log::LevelFilter::Info {
-                eprintln!("        {}", line);
-            } else {
-                warn!("{}", line);
-            }
+            eoutput!("{}", line.expect("failed to read line from stderr"));
         }
     });
 
