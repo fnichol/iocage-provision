@@ -2,6 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#![doc(html_root_url = "https://docs.rs/iocage-provision/0.1.0-dev")]
+//#![deny(missing_docs)]
+
 use ipnet::IpNet;
 use log::{debug, info, warn};
 use nix::sys::utsname;
