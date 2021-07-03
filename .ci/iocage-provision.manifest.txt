@@ -1,1 +1,1 @@
-freebsd-x86_64	iocage-provision-x86_64-unknown-freebsd.tar.gz
+freebsd-amd64	iocage-provision-x86_64-unknown-freebsd.tar.gz
