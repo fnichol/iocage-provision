@@ -39,8 +39,6 @@ pub(crate) fn parse() -> Args {
 /// copying values from the outside/host system.
 ///
 /// Project home page: https://github.com/fnichol/iocage-provision
-///
-/// Use -h for short descriptions and --help for more details.
 #[derive(Clap, Debug)]
 #[clap(
     global_setting(AppSettings::UnifiedHelpMessage),

@@ -13,6 +13,19 @@ fn main() {
 
     generate_version_short(&mut info);
     generate_version_long(&mut info);
+
+    println!("cargo:rerun-if-env-changed=NIGHTLY_BUILD");
+    if let Ok(date) = std::env::var("NIGHTLY_BUILD") {
+        println!(
+            "cargo:rustc-env=CARGO_PKG_VERSION={}-nightly.{}",
+            std::env::var("CARGO_PKG_VERSION")
+                .unwrap()
+                .split('-')
+                .next()
+                .unwrap(),
+            date,
+        );
+    }
 }
 
 fn generate_version_short(info: &mut Info) {
