@@ -337,7 +337,7 @@ extract_asset() {
     *.tar.gz)
       need_cmd tar
       need_cmd zcat
-      zcat "$asset" | indent tar xv
+      zcat "$asset" | indent tar xvf -
       ;;
     *.zip)
       need_cmd unzip
