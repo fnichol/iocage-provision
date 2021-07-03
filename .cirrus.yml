@@ -1,7 +1,11 @@
 ---
+# BEGIN: cirrus-anchors.yml
 anchors:
   - &install_cargo_make_unix
     install_cargo_make_script: ./.ci/install-cargo-make.sh
+
+  - &install_cargo_make_windows
+    install_cargo_make_script: .\.ci\install-cargo-make.ps1
 
   - &build_cargo_make_unix
     build_cargo_make_cache:
@@ -14,6 +18,24 @@ anchors:
       populate_script: ./.ci/build-cargo-make.sh
     link_cargo_make_script: ln -snf "$CARGO_HOME"/opt/*/bin/* "$CARGO_HOME"/bin/
 
+  - &build_cargo_make_windows
+    build_cargo_make_cache:
+      folder: $CARGO_HOME\opt\cargo-make
+      fingerprint_script: |
+        $env:CIRRUS_OS
+        $env:CI_CACHE_BUST
+        $env:RUST_VERSION
+        .\.ci\install-cargo-make.ps1 -PrintLatest
+      populate_script: .\.ci\build-cargo-make.ps1
+    link_cargo_make_script: |
+      Get-ChildItem "$env:CARGO_HOME\opt\*\bin\*.exe" | ForEach-Object {
+        $dst = "$env:CARGO_HOME\bin\$($_.Name)"
+
+        if (-Not (Test-Path "$dst")) {
+          New-Item -Path "$dst" -Type SymbolicLink -Value "$_" | Out-Null
+        }
+      }
+
   - &base_unix
     env:
       CARGO_HOME: /usr/local/cargo
@@ -22,7 +44,6 @@ anchors:
       curl -sSfL https://sh.rustup.rs | sh -s -- \
         -y --default-toolchain none --profile minimal --no-modify-path
     install_rust_script: rustup default "$RUST_VERSION"
-
     cargo_cache:
       folder: $CARGO_HOME/registry
       fingerprint_script: |
@@ -32,39 +53,128 @@ anchors:
         echo "${CIRRUS_OS}"; cat Cargo.lock
 
   - &base_linux
-    install_dependencies_script: apt-get install -y unzip
+    install_dependencies_script: |
+      if command -v yum >/dev/null; then
+        yum install -y unzip
+      else
+        apt-get install -y unzip
+      fi
     <<: *base_unix
+    <<: *install_cargo_make_unix
+
+  - &base_macos
+    <<: *base_unix
+    env:
+      CARGO_HOME: $HOME/.cargo
+      PATH: $HOME/.cargo/bin:$PATH
     <<: *install_cargo_make_unix
 
   - &base_freebsd
     <<: *base_unix
     <<: *build_cargo_make_unix
 
+  - &base_windows
+    env:
+      CIRRUS_SHELL: powershell
+      CARGO_HOME: $USERPROFILE\.cargo
+      PATH: $USERPROFILE\.cargo\bin;$PATH
+
+    install_rustup_script: |
+      & ([scriptblock]::Create((New-Object System.Net.WebClient).
+        DownloadString('https://gist.github.com/fnichol/699d3c2930649a9932f71bab8a315b31/raw/rustup-init.ps1')
+        )) -y --default-toolchain none --profile minimal
+    install_rust_script: rustup default "$env:RUST_VERSION"
+    cargo_cache:
+      folder: $CARGO_HOME\registry
+      fingerprint_script: |
+        if (-Not (Test-Path "Cargo.lock")) {
+          cargo "+$env:RUST_VERSION" generate-lockfile --quiet
+        }
+        $env:CIRRUS_OS; Get-Content Cargo.lock
+    <<: *install_cargo_make_windows
+
   - &install_target_unix
     install_rustup_target_script: rustup target install "$TARGET"
 
-  - &build_unix
-    build_script: cargo make build-release -- "--bin=$BIN" "--target=$TARGET"
+  - &install_target_windows
+    install_rustup_target_script: rustup target install "$env:TARGET"
+
+  - &build_bin_unix
+    build_script: |
+      if [ "${CIRRUS_TAG:-}" = "nightly" ]; then
+        export NIGHTLY_BUILD="$(date -u +%F)"
+      fi
+      cargo make build-release -- "--bin=$BIN" "--target=$TARGET"
     strip_script: $STRIP "target/$TARGET/release/$BIN"
     rename_script: cp "target/$TARGET/release/$BIN" "${BIN}-${TARGET}"
+
+  - &build_lib_unix
+    build_script: |
+      args=""
+      if [ -n "${FEATURES:-}" ]; then
+        args="--features $FEATURES"
+      fi
+      if [ -n "${NO_DEFAULT_FEATURES:-}" ]; then
+        args="$args --no-default-features"
+      fi
+      if [ -n "${ALL_FEATURES:-}" ]; then
+        args="$args --all-features"
+      fi
+      cargo make build-release -- "--lib=$LIB" "--target=$TARGET" $args
+
+  - &build_bin_windows
+    build_script: |
+      if ("$env:CIRRUS_TAG" -eq "nightly") {
+        $env:NIGHTLY_BUILD = $(Get-Date ([datetime]::UtcNow) -UFormat %Y-%m-%d)
+      }
+      cargo make build-release -- "--bin=$env:BIN" "--target=$env:TARGET"
+    rename_script: |
+      Copy-Item "target\$env:TARGET\release\$env:BIN.exe" "$env:BIN-$env:TARGET.exe"
+
+  - &build_lib_windows
+    build_script: |
+      $args = ""
+      if ("$env:FEATURES") {
+        $args = "--features $env:FEATURES"
+      }
+      if ("$env:NO_DEFAULT_FEATURES") {
+        $args = "$args --no-default-features"
+      }
+      if ("$env:ALL_FEATURES") {
+        $args = "$args --all-features"
+      }
+      cargo make build-release -- "--bin=$env:BIN" "--target=$env:TARGET" $args
 
   - &cleanup_before_upload_cache_unix
     cleanup_before_upload_cache_script: rm -rf "$CARGO_HOME/registry/index"
 
+  - &cleanup_before_upload_cache_windows
+    cleanup_before_upload_cache_script: |
+      if (Test-Path "$env:USERPROFILE\.cargo\registry\index") {
+        Remove-Item -Recurse -Force "$env:USERPROFILE\.cargo\registry\index"
+      }
+# END: cirrus-anchors.yml
+#
+#
 env:
   RUST_VERSION: stable
   MIN_SUPPORTED_RUST_VERSION: 1.46.0 # Due to CARGO_BIN_NAME
 
-task:
+check_task:
   name: check
+  only_if:
+    $CIRRUS_BRANCH !=~ ".*\.tmp" && $CIRRUS_BRANCH != $CIRRUS_DEFAULT_BRANCH
   container:
     image: rust:latest
   <<: *base_linux
   lint_script: cargo make check-lint
   format_script: cargo make check-format
 
-task:
+test_task:
   name: test-${RUST_VERSION}-${TARGET}
+  alias: tests
+  only_if:
+    $CIRRUS_BRANCH !=~ ".*\.tmp" && $CIRRUS_BRANCH != $CIRRUS_DEFAULT_BRANCH
   env:
     matrix:
       - RUST_VERSION: stable
@@ -75,48 +185,75 @@ task:
     - matrix:
         - env:
             TARGET: x86_64-unknown-freebsd
+            # Temporary workaround for error `error: sysinfo not supported on
+            # this platform` seen on FreeBSD platforms, affecting Rustup
+            #
+            # References: https://github.com/rust-lang/rustup/issues/2774
+            RUSTUP_IO_THREADS: 1
           freebsd_instance:
-            image_family: freebsd-11-4
+            image_family: freebsd-12-2
           <<: *base_freebsd
       <<: *install_target_unix
       test_bin_script: cargo make test-bin -- "--target=$TARGET"
       test_lib_script: cargo make test-lib -- "--target=$TARGET"
       <<: *cleanup_before_upload_cache_unix
 
-task:
-  name: bin-build-${BIN}-${TARGET}.${EXT}
+build_bin_task:
+  name: build-bin-${BIN}-${TARGET}.${EXT}
+  alias: build-bins
+  only_if:
+    $CIRRUS_TAG != '' || $CIRRUS_BRANCH == 'staging' || $CIRRUS_BRANCH ==
+    'trying'
   env:
     BIN: iocage-provision
-    RUST_BACKTRACE: 1
+    RUST_BACKTRACE: "1"
   matrix:
     - matrix:
         - env:
+            # Temporary workaround for error `error: sysinfo not supported on
+            # this platform` seen on FreeBSD platforms, affecting Rustup
+            #
+            # References: https://github.com/rust-lang/rustup/issues/2774
+            RUSTUP_IO_THREADS: 1
             TARGET: x86_64-unknown-freebsd
             STRIP: strip
             EXT: tar.gz
           freebsd_instance:
-            image_family: freebsd-11-4
+            image_family: freebsd-12-2
           depends_on:
             - check
             - test-stable-x86_64-unknown-freebsd
           <<: *base_freebsd
           <<: *install_target_unix
-          <<: *build_unix
+          <<: *build_bin_unix
           archive_script: tar czf "$BIN-$TARGET.$EXT" "$BIN-$TARGET"
       checksums_script: ./.ci/build-checksums.sh "$BIN-$TARGET.$EXT"
       binaries_artifacts:
         path: "$BIN-$TARGET.$EXT*"
       <<: *cleanup_before_upload_cache_unix
 
-task:
-  name: release-version
+ci_finished_task:
+  name: ci-finished
+  depends_on:
+    - check
+    - tests
+    - build-bins
+  container:
+    image: alpine:3
+  clone_script: mkdir -p "$CIRRUS_WORKING_DIR"
+  success_script: /bin/true
+
+create_github_release_task:
+  name: create-github-release
+  only_if: $CIRRUS_TAG != ''
+  depends_on:
+    - build-bins
+  container:
+    image: alpine:3
   env:
     BIN: iocage-provision
     GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
-  only_if: $CIRRUS_TAG != ''
-  depends_on:
-    - bin-build-iocage-provision-x86_64-unknown-freebsd.tar.gz
-  install_dependencies_script: apk add curl jo jq
+  install_dependencies_script: apk add curl git jo jq
   create_github_release_script: |
     if ! upload_url="$(
       ./.ci/cirrus-release.sh gh_create_version_release \
@@ -133,12 +270,65 @@ task:
     mkdir -p /tmp/release
     cd /tmp/release
     awk '{ print $2 }' "$manifest" | while read -r a; do
-      "$cr" ci_download "bin-build-$a/binaries/$a"
-      "$cr" ci_download "bin-build-$a/binaries/$a.md5"
-      "$cr" ci_download "bin-build-$a/binaries/$a.sha256"
+      "$cr" ci_download "build-bin-$a/binaries/$a"
+      "$cr" ci_download "build-bin-$a/binaries/$a.md5"
+      "$cr" ci_download "build-bin-$a/binaries/$a.sha256"
     done
     cp "$manifest" .
     ls -l "$BIN"*
-  upload_release_artifacts_script: |
+  upload_github_release_artifacts_script: |
     url="$(cat /tmp/upload_url)"
     ./.ci/cirrus-release.sh gh_upload_all "$url" /tmp/release
+
+publish_crate_task:
+  name: publish-crate-${CRATE}
+  alias: publish-crates
+  only_if: $CIRRUS_TAG =~ 'v.*'
+  depends_on:
+    - create-github-release
+  env:
+    CRATE: iocage-provision
+    GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
+  container:
+    image: rust:latest
+  <<: *base_linux
+  login_script: echo "$CRATES_IO_TOKEN" | cargo login
+  publish_script: cargo publish
+
+publish_github_release_task:
+  name: publish-github-release
+  only_if: $CIRRUS_TAG != ''
+  depends_on:
+    - create-github-release
+    - publish-crates
+  container:
+    image: alpine:3
+  env:
+    GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
+  install_dependencies_script: apk add curl jo jq
+  publish_release_script: |
+    ./.ci/cirrus-release.sh gh_publish_release \
+      "$CIRRUS_REPO_FULL_NAME" "$CIRRUS_TAG" CHANGELOG.md
+
+release_finished_task:
+  name: release-finished
+  only_if: $CIRRUS_TAG != ''
+  depends_on:
+    - create-github-release
+    - publish-crates
+    - publish-github-release
+  container:
+    image: alpine:3
+  clone_script: mkdir -p "$CIRRUS_WORKING_DIR"
+  success_script: /bin/true
+
+trigger_nightly_release_task:
+  name: trigger-nightly-release
+  only_if: $CIRRUS_CRON == 'nightly'
+  container:
+    image: alpine:3
+  env:
+    GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
+  install_dependencies_script: apk add curl git jo jq
+  trigger_release_script:
+    ./.ci/cirrus-release.sh gh_update_tag "$CIRRUS_REPO_FULL_NAME" nightly

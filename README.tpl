@@ -1,6 +1,6 @@
 <h1 align="center">
   <br/>
-  iocage-provision
+  {{crate}}
   <br/>
 </h1>
 
@@ -32,30 +32,6 @@ copying values from the outside/host system.
 <summary><strong>Table of Contents</strong></summary>
 
 <!-- toc -->
-
-- [CLI](#cli)
-  - [Usage](#usage)
-    - [Example 1 Provisioning a New Jail With a Name and Address](#example-1-provisioning-a-new-jail-with-a-name-and-address)
-    - [Example 2 Provisioning a New Jail With a User and SSH Service](#example-2-provisioning-a-new-jail-with-a-user-and-ssh-service)
-    - [Example 3 Using a Custom Default Gateway and Base Release](#example-3-using-a-custom-default-gateway-and-base-release)
-  - [Installation](#installation)
-    - [install.sh (Pre-Built Binaries)](#installsh-pre-built-binaries)
-    - [GitHub Releasees (Pre-Built Binaries)](#github-releasees-pre-built-binaries)
-    - [Cargo Install](#cargo-install)
-    - [From Source](#from-source)
-- [Library](#library)
-- [CI Status](#ci-status)
-  - [Build (main branch)](#build-main-branch)
-  - [Test (main branch)](#test-main-branch)
-  - [Check (main branch)](#check-main-branch)
-- [Code of Conduct](#code-of-conduct)
-- [Issues](#issues)
-- [Contributing](#contributing)
-- [Release History](#release-history)
-- [Authors](#authors)
-- [License](#license)
-
-<!-- tocstop -->
 
 </details>
 
@@ -164,6 +140,8 @@ stable release:
 ---
 
 ## Library
+
+{{readme}}
 
 ## CI Status
 
