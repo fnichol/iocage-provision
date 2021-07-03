@@ -288,7 +288,7 @@ publish_crate_task:
     - create-github-release
   env:
     CRATE: iocage-provision
-    GITHUB_TOKEN: ENCRYPTED[96becec46d59cdfaa81014129b1dbfdce9292468954f93330a0cb7d0f2ef56f9f4077dd5ccd96ab1a7e52afa98c9d478]
+    CRATES_IO_TOKEN: ENCRYPTED[1a3e372389851681c7f61bd66c70a7f00f6efe85baf1a183406a5381b06b6deff67d441c53a1122ec6a80f9ea3e34059]
   container:
     image: rust:latest
   <<: *base_linux
