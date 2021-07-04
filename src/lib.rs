@@ -143,6 +143,7 @@ pub fn provision_jail(
     ip: &IpNet,
     gateway: &IpAddr,
     release: &str,
+    thick_jail: bool,
     user: Option<&str>,
     ssh_service: bool,
 ) -> Result<()> {
@@ -152,7 +153,7 @@ pub fn provision_jail(
     section!("Provisioning a jail named '{}'", name);
 
     info!("Creating '{}' via iocage", name);
-    run_iocage_create(name, ip, gateway, release, json.path())?;
+    run_iocage_create(name, ip, gateway, release, thick_jail, json.path())?;
 
     if let Some(user) = user {
         let group = find_group(user.primary_group_id())?;
@@ -351,6 +352,7 @@ fn run_iocage_create(
     ip: &IpNet,
     gateway: &IpAddr,
     release: &str,
+    thick_jail: bool,
     pkglist: &Path,
 ) -> Result<()> {
     let mut cmd = Command::new("iocage");
@@ -361,8 +363,11 @@ fn run_iocage_create(
         .arg("--release")
         .arg(release)
         .arg("--pkglist")
-        .arg(pkglist)
-        .arg("vnet=on")
+        .arg(pkglist);
+    if thick_jail {
+        cmd.arg("--thickjail");
+    }
+    cmd.arg("vnet=on")
         .arg(format!("ip4_addr=vnet0|{}", ip))
         .arg(format!("defaultrouter={}", gateway))
         .arg("resolver=none")

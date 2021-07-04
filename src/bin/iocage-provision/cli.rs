@@ -93,6 +93,14 @@ pub(crate) struct Args {
     #[clap(short = 's', long)]
     pub(crate) ssh: bool,
 
+    /// Installs a thick jail rather than a clone.
+    ///
+    /// If this flag is set, then a so-called "thick jail" is installed, which is a jail that is
+    /// not a ZFS clone of the chosen release. This may be preferable when a jail is to be run over
+    /// the long term and updated on a regular basis.
+    #[clap(short = 'T', long = "thickjail")]
+    pub(crate) thick_jail: bool,
+
     /// User to create in jail instance (based on host system's information).
     ///
     /// When this option is used, a user account will be created in the new jail with settings
