@@ -20,6 +20,7 @@ fn main() -> Result<()> {
         &args.ip,
         &args.gateway,
         &args.release,
+        args.thick_jail,
         args.user.as_deref(),
         args.ssh,
     )?;

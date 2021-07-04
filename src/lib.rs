@@ -6,7 +6,7 @@
 //#![deny(missing_docs)]
 
 use ipnet::IpNet;
-use log::{debug, info, warn};
+use log::{debug, info};
 use nix::sys::utsname;
 use std::ffi::OsStr;
 use std::fs;
@@ -26,6 +26,26 @@ macro_rules! section {
             println!("--- {}", format!($($arg)+));
         } else {
             log::info!($($arg)+);
+        }
+    )
+}
+
+macro_rules! output {
+    ($($arg:tt)+) => (
+        if log::max_level() == log::LevelFilter::Info {
+            println!("        {}", format!($($arg)+));
+        } else {
+            log::info!($($arg)+);
+        }
+    )
+}
+
+macro_rules! eoutput {
+    ($($arg:tt)+) => (
+        if log::max_level() == log::LevelFilter::Info {
+            eprintln!("        {}", format!($($arg)+));
+        } else {
+            log::warn!($($arg)+);
         }
     )
 }
@@ -123,6 +143,7 @@ pub fn provision_jail(
     ip: &IpNet,
     gateway: &IpAddr,
     release: &str,
+    thick_jail: bool,
     user: Option<&str>,
     ssh_service: bool,
 ) -> Result<()> {
@@ -132,7 +153,7 @@ pub fn provision_jail(
     section!("Provisioning a jail named '{}'", name);
 
     info!("Creating '{}' via iocage", name);
-    run_iocage_create(name, ip, gateway, release, json.path())?;
+    run_iocage_create(name, ip, gateway, release, thick_jail, json.path())?;
 
     if let Some(user) = user {
         let group = find_group(user.primary_group_id())?;
@@ -331,6 +352,7 @@ fn run_iocage_create(
     ip: &IpNet,
     gateway: &IpAddr,
     release: &str,
+    thick_jail: bool,
     pkglist: &Path,
 ) -> Result<()> {
     let mut cmd = Command::new("iocage");
@@ -341,8 +363,11 @@ fn run_iocage_create(
         .arg("--release")
         .arg(release)
         .arg("--pkglist")
-        .arg(pkglist)
-        .arg("vnet=on")
+        .arg(pkglist);
+    if thick_jail {
+        cmd.arg("--thickjail");
+    }
+    cmd.arg("vnet=on")
         .arg(format!("ip4_addr=vnet0|{}", ip))
         .arg(format!("defaultrouter={}", gateway))
         .arg("resolver=none")
@@ -453,13 +478,7 @@ where
     let stdout_handle = thread::spawn(move || {
         for line in stdout.lines() {
             // This error happens in a thread, so we will panic here on error
-            let line = line.expect("failed to read line from stdout");
-
-            if log::max_level() == log::LevelFilter::Info {
-                println!("        {}", line);
-            } else {
-                info!("{}", line);
-            }
+            output!("{}", line.expect("failed to read line from stdout"));
         }
     });
 
@@ -472,13 +491,7 @@ where
     let stderr_handle = thread::spawn(move || {
         for line in stderr.lines() {
             // This error happens in a thread, so we will panic here on error
-            let line = line.expect("failed to read line from stderr");
-
-            if log::max_level() == log::LevelFilter::Info {
-                eprintln!("        {}", line);
-            } else {
-                warn!("{}", line);
-            }
+            eoutput!("{}", line.expect("failed to read line from stderr"));
         }
     });
 
