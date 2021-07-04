@@ -1,6 +1,6 @@
 [package]
 name = "iocage-provision"
-version = "0.1.2-dev"
+version = "0.2.0"
 authors = ["Fletcher Nichol <fnichol@nichol.ca>"]
 edition = "2018"
 license = "MPL-2.0"
