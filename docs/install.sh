@@ -352,9 +352,11 @@ install_bin() {
   dest="$2"
 
   need_cmd dirname
+  need_cmd install
+  need_cmd mkdir
 
   info_start "Installing '$dest'"
-  install -d "$(dirname "$dest")"
+  mkdir -p "$(dirname "$dest")"
   install -p -m 755 "$src" "$dest"
   info_end
 }
