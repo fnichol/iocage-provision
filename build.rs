@@ -47,10 +47,10 @@ fn version_short(info: &mut Info) -> String {
     if let Some(hash) = info.commit_hash_short() {
         let mut extra = String::new();
         extra.push_str(" (");
-        extra.push_str(&hash);
+        extra.push_str(hash);
         extra.push(' ');
         if let Some(date) = info.commit_date() {
-            extra.push_str(&date);
+            extra.push_str(date);
             extra.push(')');
             version.push_str(&extra)
         }
@@ -66,11 +66,11 @@ fn version_long(info: &mut Info) -> String {
     version.push_str(env!("CARGO_PKG_VERSION"));
     if let Some(hash) = info.commit_hash_long() {
         version.push_str("\ncommit-hash: ");
-        version.push_str(&hash);
+        version.push_str(hash);
     }
     if let Some(date) = info.commit_date() {
         version.push_str("\ncommit-date: ");
-        version.push_str(&date);
+        version.push_str(date);
     }
     version
 }
